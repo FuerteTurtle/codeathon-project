@@ -5,7 +5,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "proxy": "smee -u https://smee.io/twHJ087y2Akx7YpU -t http://localhost:3000/api/webhook",
+    "proxy": "smee -u https://smee.io/twHJ087y2Akx7YpU -t http://localhost:3000/api/github/webhooks",
     "server": "node app.js"
   },
   "keywords": [],

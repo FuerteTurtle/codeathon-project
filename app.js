@@ -1,6 +1,5 @@
 import dotenv from "dotenv";
-import { App } from "octokit";
-import { createNodeMiddleware } from "octokit";
+import { App, createNodeMiddleware } from "octokit";
 import fs from "fs";
 import http from "http";
 
@@ -14,7 +13,7 @@ const {
 const privateKey = fs.readFileSync(privateKeyPath, "utf8");
 
 const app = new App({
-  appId: appId,
+  appId: parseInt(appId, 10),
   privateKey: privateKey,
   webhooks: { secret: webhookSecret },
 });
@@ -24,48 +23,54 @@ const message =
 
 async function handlePullRequestOpened({ octokit, payload }) {
   console.log(
-    `Receieved a pull request event for #${payload.pull_request.number}`
+    `Received a pull request event for #${payload.pull_request.number}`
   );
-  try {
-    await octokit.request(
-      "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-      {
-        owner: payload.repository.owner.login,
-        repo: payload.repository.name,
-        issue_number: payload.pull_request.number,
-        body: message,
-        headers: { "x-github-api-version": "2022-11-28" },
-      }
-    );
-  } catch (error) {
-    if (error.response) {
-      console.error(
-        `Error! Status: ${error.response.status}. Message: ${error.response.data.message}`
-      );
-    } else {
-      console.error(error);
-    }
-  }
+  // try {
+  //   await octokit.request(
+  //     "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
+  //     {
+  //       owner: payload.repository.owner.login,
+  //       repo: payload.repository.name,
+  //       issue_number: payload.pull_request.number,
+  //       body: message,
+  //       headers: { "x-github-api-version": "2022-11-28" },
+  //     }
+  //   );
+  // } catch (error) {
+  //   if (error.response) {
+  //     console.error(
+  //       `Error! Status: ${error.response.status}. Message: ${error.response.data.message}`
+  //     );
+  //   } else {
+  //     console.error(error);
+  //   }
+  // }
 }
 
 app.webhooks.on("pull_request.opened", handlePullRequestOpened);
 
-app.webhooks.onError((error) => {
-  if (error.name === "AggregateError") {
-    console.error(`Error processing request: ${error.event}`);
-  } else {
-    console.error(error);
-  }
-});
+// app.webhooks.onError((error) => {
+//   console.error(error);
+// });
 
 const port = 3000;
 const host = "localhost";
-const path = "/api/webhook";
+const path = "/api/github/webhooks";
 const localWebhookUrl = `http://${host}:${port}${path}`;
 
-const middleware = createNodeMiddleware(app.webhooks, { path });
+const middleware = createNodeMiddleware(app.webhooks);
 
-http.createServer(middleware).listen(port, () => {
-  console.log(`Server is listening for events at: ${localWebhookUrl}`);
-  console.log("Press Ctrl + C to quit.");
-});
+http
+  .createServer(async (req, res) => {
+    if (await middleware(req, res)) {
+      console.log("middleware route matched");
+      return;
+    }
+    console.log("middleware route didn't match");
+    res.writeHead(404);
+    res.end();
+  })
+  .listen(port, () => {
+    console.log(`Server is listening for events at: ${localWebhookUrl}`);
+    console.log("Press Ctrl + C to quit.");
+  });
