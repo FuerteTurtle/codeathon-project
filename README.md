@@ -1,0 +1,1 @@
+2 The github webhook should be setup to respond to the PR event.
