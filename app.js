@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import { createServer } from "node:http";
 import { App, createNodeMiddleware } from "octokit";
 import fs from "fs";
+import completeGHField from "./trello.js";
 
 dotenv.config();
 
@@ -28,7 +29,8 @@ app.webhooks.on("issues.opened", ({ octokit, payload }) => {
   });
 });
 
-app.webhooks.on("pull_request.opened", ({ octokit, payload }) => {
+app.webhooks.on("pull_request.opened", async ({ octokit, payload }) => {
+  await completeGHField(payload.pull_request.html_url);
   return octokit.rest.issues.createComment({
     owner: payload.repository.owner.login,
     repo: payload.repository.name,
