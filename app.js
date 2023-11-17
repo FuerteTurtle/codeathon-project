@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
+import { createServer } from "node:http";
 import { App, createNodeMiddleware } from "octokit";
 import fs from "fs";
-import http from "http";
 
 dotenv.config();
 
@@ -13,64 +13,49 @@ const {
 const privateKey = fs.readFileSync(privateKeyPath, "utf8");
 
 const app = new App({
-  appId: parseInt(appId, 10),
-  privateKey: privateKey,
+  appId,
+  privateKey,
   webhooks: { secret: webhookSecret },
+  oauth: { clientId: null, clientSecret: null },
 });
 
-const message =
-  "I see you have a new PR here! Imma do some Trello automations for you...";
-
-async function handlePullRequestOpened({ octokit, payload }) {
-  console.log(
-    `Received a pull request event for #${payload.pull_request.number}`
-  );
-  // try {
-  //   await octokit.request(
-  //     "POST /repos/{owner}/{repo}/issues/{issue_number}/comments",
-  //     {
-  //       owner: payload.repository.owner.login,
-  //       repo: payload.repository.name,
-  //       issue_number: payload.pull_request.number,
-  //       body: message,
-  //       headers: { "x-github-api-version": "2022-11-28" },
-  //     }
-  //   );
-  // } catch (error) {
-  //   if (error.response) {
-  //     console.error(
-  //       `Error! Status: ${error.response.status}. Message: ${error.response.data.message}`
-  //     );
-  //   } else {
-  //     console.error(error);
-  //   }
-  // }
-}
-
-app.webhooks.on("pull_request.opened", handlePullRequestOpened);
-
-// app.webhooks.onError((error) => {
-//   console.error(error);
-// });
-
-const port = 3000;
-const host = "localhost";
-const path = "/api/github/webhooks";
-const localWebhookUrl = `http://${host}:${port}${path}`;
-
-const middleware = createNodeMiddleware(app.webhooks);
-
-http
-  .createServer(async (req, res) => {
-    if (await middleware(req, res)) {
-      console.log("middleware route matched");
-      return;
-    }
-    console.log("middleware route didn't match");
-    res.writeHead(404);
-    res.end();
-  })
-  .listen(port, () => {
-    console.log(`Server is listening for events at: ${localWebhookUrl}`);
-    console.log("Press Ctrl + C to quit.");
+app.webhooks.on("issues.opened", ({ octokit, payload }) => {
+  return octokit.rest.issues.createComment({
+    owner: payload.repository.owner.login,
+    repo: payload.repository.name,
+    issue_number: payload.issue.number,
+    body: "Hello, World!",
   });
+});
+
+app.webhooks.on("pull_request.opened", ({ octokit, payload }) => {
+  return octokit.rest.issues.createComment({
+    owner: payload.repository.owner.login,
+    repo: payload.repository.name,
+    issue_number: payload.pull_request.number,
+    body: "hello, Pull request World",
+  });
+});
+
+app.webhooks.onError((error) => {
+  if (error.name === "AggregateError") {
+    error.errors.forEach((err) => {
+      const errorMessage = err.message
+        ? `${err.name}: ${err.message}`
+        : "Error: An Unspecified error occurred";
+      console.error(`Error processing request: ${errorMessage}`);
+      console.error("Request details:", err.request);
+      console.error("Response details:", err.response);
+    });
+  } else {
+    const errorMessage = error.message
+      ? `${error.name}: ${error.message}`
+      : "Error: An Unspecified error occurred";
+    console.error(errorMessage);
+    console.error("Request details:", error.request);
+    console.error("Response details:", error.response);
+  }
+});
+
+// Your app can now receive webhook events at `/api/github/webhooks`
+createServer(createNodeMiddleware(app)).listen(3000);
